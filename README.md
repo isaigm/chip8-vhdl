@@ -1,5 +1,6 @@
 # CHIP-8 Interpreter in VHDL
-<img width="1452" height="692" alt="image" src="https://github.com/user-attachments/assets/83c2a40d-492a-43b2-9a9b-43ad14f76748" />
+<img width="1471" height="692" alt="image" src="https://github.com/user-attachments/assets/36cd309a-09ec-41ed-8743-5b8436599dd9" />
+
 
 A cycle-accurate CHIP-8 interpreter written in VHDL, targeting the Digilent
 Basys 3 (Xilinx Artix-7 XC7A35T). The core passes the full
