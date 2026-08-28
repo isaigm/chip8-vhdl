@@ -10,7 +10,7 @@ entity cpu is
   port (
     clk: in std_logic;
     rst: in std_logic;
-    keys: in std_logic_vector(15 downto 0);
+    keys: in std_logic_vector(15 downto 0)
   );
 end entity;
 
