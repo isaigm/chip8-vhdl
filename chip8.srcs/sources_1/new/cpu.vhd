@@ -15,33 +15,6 @@ entity cpu is
 end entity;
 
 architecture Behavioral of cpu is
-
-  function to_bcd(bin : unsigned(7 downto 0)) return std_logic_vector is
-      variable temp     : unsigned(7 downto 0) := bin;
-      variable bcd      : unsigned(11 downto 0) := (others => '0');
-      variable j       : integer;
-  begin
-      for j in 0 to 7 loop
-          if bcd(3 downto 0) >= 5 then
-              bcd(3 downto 0) := bcd(3 downto 0) + 3;
-          end if;
-          if bcd(7 downto 4) >= 5 then
-              bcd(7 downto 4) := bcd(7 downto 4) + 3;
-          end if;
-          if bcd(11 downto 8) >= 5 then
-              bcd(11 downto 8) := bcd(11 downto 8) + 3;
-          end if;
-          bcd := bcd(10 downto 0) & temp(7);
-          temp := temp(6 downto 0) & '0';
-      end loop;
-      return std_logic_vector(bcd);
-  end function;
-    type reg_t is array (0 to 15) of std_logic_vector(7 downto 0);
-    type stack_t is array (0 to 15) of std_logic_vector(15 downto 0);
-    
-    type status_t is (FETCH_HI, FETCH_LO, DECODE, EX_CLS, EX_RET, EX_JP, EX_CALL, EX_SE3, EX_SNE, 
-    EX_SE5, EX_LD, EX_ADD7, EX_LD8, EX_8_NO_VF, EX_8_VF, EX_SNE9, 
-    EX_LDA, EX_JPB, EX_RAND, EX_DRW, EX_SKP, EX_SKNP, EX_LDF7, EX_WAITKEY, EX_LDF15, EX_LDF18, EX_ADD1E, EX_LD29, EX_LD33, EX_LD55, EX_LD65);
     signal tick_counter: integer range 0 to TICK_DIV := 0;
     signal curr_status: status_t := FETCH_HI;
     signal op: std_logic_vector(3 downto 0)  := (others => '0');
@@ -62,9 +35,8 @@ architecture Behavioral of cpu is
     signal wb_vf: std_logic;
 
     signal v_reg: reg_t := (others => (others => '0'));
-    signal stack: stack_t := (others => (others => '0'));
+   
     signal gfx: framebuffer_t := (others => (others => '0'));
-    signal sp: std_logic_vector(7 downto 0) := (others => '0');
     signal i: std_logic_vector(15 downto 0) := (others => '0');
     signal n: std_logic_vector(3 downto 0);
     signal vx: std_logic_vector(7 downto 0);
@@ -76,10 +48,27 @@ architecture Behavioral of cpu is
     signal key_found: std_logic;
     signal key_idx:  integer range 0 to 16;
     signal curr_idx: integer range 0 to 63 := 0;
-    signal bcd : std_logic_vector(11 downto 0);
-    
+    signal push: std_logic := '0';
+    signal pop: std_logic := '0';
+    signal push_data: std_logic_vector(15 downto 0);
+    signal pop_data: std_logic_vector(15 downto 0);
+   
+    signal bcd_out: std_logic_vector(11 downto 0);
 begin
-    
+    bcd_inst: entity work.bcd
+    port map (
+      bin     => vx,
+      bcd_out => bcd_out
+    );
+    stack_inst: entity work.stack
+    port map (
+      clk      => clk,
+      rst      => rst,
+      in_data  => push_data,
+      push     => push,
+      pop      => pop,
+      out_data => pop_data
+    );
     lfsr16_inst: entity work.lfsr16
     port map (
       clk  => clk,
@@ -127,9 +116,9 @@ begin
     
 
     write_data <= v_reg(curr_idx mod 16) when curr_status = EX_LD55 else
-              (x"0" & bcd(11 downto 8)) when (curr_status = EX_LD33 and curr_idx = 0) else
-              (x"0" & bcd(7 downto 4))  when (curr_status = EX_LD33 and curr_idx = 1) else
-              (x"0" & bcd(3 downto 0))  when (curr_status = EX_LD33 and curr_idx = 2) else
+              (x"0" & bcd_out(11 downto 8)) when (curr_status = EX_LD33 and curr_idx = 0) else
+              (x"0" & bcd_out(7 downto 4))  when (curr_status = EX_LD33 and curr_idx = 1) else
+              (x"0" & bcd_out(3 downto 0))  when (curr_status = EX_LD33 and curr_idx = 2) else
               (others => '0');
     we         <= '1' when (curr_status = EX_LD55 and curr_idx <= to_integer(unsigned(opcode(11 downto 8)))) else 
                   '1' when (curr_status = EX_LD33 and curr_idx <= 2) else '0';
@@ -140,7 +129,8 @@ begin
     nnn    <= opcode(11 downto 0);
     n      <= opcode(3 downto 0);
     family <= opcode(15 downto 12);
-    bcd    <= to_bcd(unsigned(vx));
+   
+    push_data <= pc when curr_status = EX_CALL else (others => '0');
     process(clk)
       variable sprite: std_logic_vector(63 downto 0) := (others => '0');
       variable collision_mask: std_logic_vector(63 downto 0) := (others => '0');
@@ -156,12 +146,12 @@ begin
               tick_counter  <= 0;        
               dt            <= (others => '0');   
               st            <= (others => '0');
-              sp            <= (others => '0');
               i             <= (others => '0');
               opcode        <= (others => '0');
               v_reg         <= (others => (others => '0'));
               gfx           <= (others => (others => '0'));
-              stack         <= (others => (others => '0'));
+              pop           <= '0';
+              push          <= '0';
             else
               if tick_counter = TICK_DIV - 1 then
                 tick_counter <= 0;
@@ -189,6 +179,7 @@ begin
                           curr_status <= EX_CLS;
                         elsif n = x"E" then
                           curr_status <= EX_RET;
+                          pop <= '1';
                         else
                           curr_status <= FETCH_HI;
                         end if;
@@ -196,6 +187,7 @@ begin
                         curr_status <= EX_JP;
                       when x"2" =>
                         curr_status <= EX_CALL;
+                        push        <= '1';
                       when x"3" =>
                         curr_status <= EX_SE3;
                       when x"4" =>
@@ -266,15 +258,14 @@ begin
                     gfx <= (others => (others => '0'));
                     curr_status <= FETCH_HI;
                   when EX_RET =>
-                    pc <= stack(to_integer(unsigned(sp) - 1));
-                    sp <= std_logic_vector(unsigned(sp) - 1);
+                    pc <= pop_data;
+                    pop <= '0';
                     curr_status <= FETCH_HI;
                   when EX_JP =>
                     pc(11 downto 0) <= nnn;
                     curr_status <= FETCH_HI;
                   when EX_CALL =>
-                    sp <= std_logic_vector(unsigned(sp) + 1);
-                    stack(to_integer(unsigned(sp))) <= pc;
+                    push <= '0';
                     pc(11 downto 0) <= nnn;
                     curr_status <= FETCH_HI;
                   when EX_SE3 =>
