@@ -1,0 +1,11 @@
+.vscode/
+*.cache/
+*.hw/
+*.runs/
+*.sim/
+*.ip_user_files/
+*.gen/
+.Xil/
+*.jou
+*.log
+*.str
