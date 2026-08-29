@@ -4,9 +4,7 @@ library ieee;
   use IEEE.std_logic_misc.all;
   use work.chip8_pkg.all;
 entity cpu is
- generic (
-    TICK_DIV : integer := 1000   
-  );
+ 
   port (
     clk: in std_logic;
     rst: in std_logic;
@@ -15,7 +13,7 @@ entity cpu is
 end entity;
 
 architecture Behavioral of cpu is
-    signal tick_counter: integer range 0 to TICK_DIV := 0;
+  
     signal curr_status: status_t := FETCH_HI;
     signal op: std_logic_vector(3 downto 0)  := (others => '0');
     signal a: std_logic_vector(7 downto 0)   := (others => '0');
@@ -24,8 +22,7 @@ architecture Behavioral of cpu is
     signal carry: std_logic                  := '0';
     signal opcode: std_logic_vector(15 downto 0) := (others => '0');
     signal pc: std_logic_vector(15 downto 0) := x"0200";
-    signal dt: std_logic_vector(7 downto 0) := (others => '0');
-    signal st: std_logic_vector(7 downto 0) := (others => '0');
+  
     
     signal write_addr: std_logic_vector(11 downto 0);
     signal read_addr: std_logic_vector(11 downto 0);
@@ -52,9 +49,25 @@ architecture Behavioral of cpu is
     signal pop: std_logic := '0';
     signal push_data: std_logic_vector(15 downto 0);
     signal pop_data: std_logic_vector(15 downto 0);
-   
     signal bcd_out: std_logic_vector(11 downto 0);
+    signal write_dt: std_logic := '0';
+    signal write_st: std_logic := '0';
+    signal timer_val: std_logic_vector(7 downto 0);
+    signal out_dt: std_logic_vector(7 downto 0);
+
 begin
+  timers_inst: entity work.timers
+  generic map (
+    TICK_DIV => 1000
+  )
+  port map (
+    clk       => clk,
+    rst       => rst,
+    write_dt  => write_dt,
+    write_st  => write_st,
+    timer_val => timer_val,
+    out_dt    => out_dt
+  );
     bcd_inst: entity work.bcd
     port map (
       bin     => vx,
@@ -131,6 +144,7 @@ begin
     family <= opcode(15 downto 12);
    
     push_data <= pc when curr_status = EX_CALL else (others => '0');
+    timer_val <= vx when (curr_status = EX_LDF15 or curr_status = EX_LDF18) else (others => '0');
     process(clk)
       variable sprite: std_logic_vector(63 downto 0) := (others => '0');
       variable collision_mask: std_logic_vector(63 downto 0) := (others => '0');
@@ -142,28 +156,16 @@ begin
             if rst = '1' then
               pc            <= x"0200";
               curr_status   <= FETCH_HI;
-              curr_idx      <= 0;
-              tick_counter  <= 0;        
-              dt            <= (others => '0');   
-              st            <= (others => '0');
+              curr_idx      <= 0;   
               i             <= (others => '0');
               opcode        <= (others => '0');
               v_reg         <= (others => (others => '0'));
               gfx           <= (others => (others => '0'));
               pop           <= '0';
               push          <= '0';
+              write_st      <= '0';
+              write_dt      <= '0';
             else
-              if tick_counter = TICK_DIV - 1 then
-                tick_counter <= 0;
-                if unsigned(dt) > 0 then
-                    dt <= std_logic_vector(unsigned(dt) - 1);
-                end if;
-                if unsigned(st) > 0 then
-                  st <= std_logic_vector(unsigned(st) - 1);
-                end if;
-              else
-                tick_counter <= tick_counter + 1;
-              end if;
                 case curr_status is
                   when FETCH_HI =>
                     opcode(15 downto 8) <= read_data;
@@ -237,8 +239,10 @@ begin
                             curr_status <= EX_WAITKEY;
                           when x"15" =>
                             curr_status <= EX_LDF15;
+                            write_dt <= '1';
                           when x"18" =>
                             curr_status <= EX_LDF18;
+                            write_st    <= '1'; 
                           when x"1E" =>
                             curr_status <= EX_ADD1E;
                           when x"29" =>
@@ -353,7 +357,7 @@ begin
                     end if;
                     curr_status <= FETCH_HI;
                   when EX_LDF7 =>
-                    v_reg(to_integer(unsigned(opcode(11 downto 8)))) <= dt;
+                    v_reg(to_integer(unsigned(opcode(11 downto 8)))) <= out_dt;
                     curr_status <= FETCH_HI;
                   when EX_WAITKEY =>
                     if key_found = '1' then
@@ -361,10 +365,10 @@ begin
                         curr_status <= FETCH_HI;
                     end if;
                   when EX_LDF15 =>
-                    dt <= vx;
+                    write_dt <= '0';
                     curr_status <= FETCH_HI;
                   when EX_LDF18 =>
-                    st <= vx;
+                    write_st <= '0';
                     curr_status <= FETCH_HI;
                   when EX_ADD1E =>
                     I <= std_logic_vector(unsigned(I) + resize(unsigned(vx), 16));
