@@ -1,0 +1,6 @@
+
+
+sim/roms/** linguist-generated=true
+
+*.vhd  linguist-language=VHDL
+*.vhdl linguist-language=VHDL
