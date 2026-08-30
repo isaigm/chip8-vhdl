@@ -32,6 +32,9 @@ VHDL_SOURCES = \
     $(SRC)/control_unit.vhd \
     $(SRC)/priority_encoder.vhd \
     $(SRC)/ram.vhd \
+    $(SRC)/stack.vhd \
+    $(SRC)/bcd.vhd \
+    $(SRC)/timers.vhd \
     $(SRC)/cpu.vhd
 
 TOPLEVEL = cpu

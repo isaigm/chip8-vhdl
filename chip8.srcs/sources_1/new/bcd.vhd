@@ -14,11 +14,13 @@
   begin
     
     process(bin)
-        variable temp     : unsigned(7 downto 0) := unsigned(bin);
-        variable bcd_v    : unsigned(11 downto 0) := (others => '0');
-        variable j        : integer;
+        variable temp     : unsigned(7 downto 0);
+        variable bcd_v    : unsigned(11 downto 0);
+    
     begin
         bcd_out <= (others => '0');
+        bcd_v := (others => '0');
+        temp := unsigned(bin);
         for j in 0 to 7 loop
           if bcd_v(3 downto 0) >= 5 then
               bcd_v(3 downto 0) := bcd_v(3 downto 0) + 3;
